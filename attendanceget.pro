@@ -11,6 +11,7 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 TARGET = attendanceget
 TEMPLATE = app
+DESTDIR = ./attendanceget_bin
 
 
 SOURCES += main.cpp\

@@ -35,6 +35,7 @@ private slots:
 
 private:
     void getAttendance();
+    void getAttendance2();
 
 private:
     Ui::MainWindow *ui;
