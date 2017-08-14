@@ -3,6 +3,10 @@
 
 #include <QMainWindow>
 
+#include <QJsonArray>
+#include <QDateTime>
+#include <QMap>
+
 class QNetworkAccessManager;
 class QNetworkReply;
 
@@ -20,8 +24,14 @@ public:
         OTNone,
         OTGetAccessToken,               // 获取AccessToken
         OTGetAttendance,                // 获取考勤信息
-        OTOrderDownloadEnd,             // 订单下载结束
+        OTGetDepartment,                // 获取部门与成员信息
+        OTGetAttendance3,
         OTError,                        // 出错
+    };
+
+    struct SUserAttendance
+    {
+        QString _username;
     };
 
 public:
@@ -37,6 +47,11 @@ private:
     void getAttendance();
     void getAttendance2();
 
+    void getDepartment();
+    void getUserList();
+    void getUserList(int department_id);
+    void getAttendance3();
+
 private:
     Ui::MainWindow *ui;
 
@@ -44,6 +59,15 @@ private:
     QString _token;
     OptType _optType;
     QTimer *_timer;
+
+    QJsonArray _departmentJsonArray;
+    int _currentIndex;
+
+    QStringList _userIdList;
+    int _currentUserIdIndex;
+    QDateTime _dateTimeFrom;
+
+    QMap<QString, SUserAttendance> _attendanceDataMap;
 };
 
 #endif // MAINWINDOW_H

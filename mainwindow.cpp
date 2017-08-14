@@ -5,6 +5,7 @@
 #include <QNetworkReply>
 #include <QTimer>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QJsonDocument>
 
 #include <QDebug>
@@ -60,7 +61,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
         if (0 == errcode)
         {
             _token = json.value("access_token").toString();
-            qDebug() << _token;
+//            qDebug() << _token;
 
             _optType = OTGetAttendance;
             _timer->start(1000);
@@ -71,6 +72,73 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
             QString errmsg = json.value("errmsg").toString();
 //            ui->textEdit->setText(errmsg);
             _timer->start(1000);
+        }
+        break;
+    case OTGetAttendance:
+        if (0 == errcode)
+        {
+            _optType = OTGetDepartment;
+            _departmentJsonArray = json.value("department").toArray();
+            _currentIndex = 0;
+            _userIdList.clear();
+
+            foreach (QJsonValue jv, _departmentJsonArray) {
+                qDebug() << jv.toObject().value("name").toString();
+            }
+//            QJsonArray::Iterator it = _departmentJsonArray.begin();
+            getUserList();
+        }
+        break;
+    case OTGetDepartment:
+        if (0 == errcode)
+        {
+            QJsonArray userArray = json.value("userlist").toArray();
+            foreach (QJsonValue jv, userArray) {
+                qDebug() << jv.toObject().value("userid").toString() << jv.toObject().value("name").toString();
+                _userIdList.append(jv.toObject().value("userid").toString());
+
+                _attendanceDataMap[jv.toObject().value("userid").toString()] = SUserAttendance();
+                _attendanceDataMap[jv.toObject().value("userid").toString()]._username = jv.toObject().value("name").toString();
+            }
+
+            _currentIndex++;
+            getUserList();
+        }
+        else
+        {
+            QString errmsg = json.value("errmsg").toString();
+            qDebug() << errmsg;
+        }
+        break;
+    case OTGetAttendance3:
+        if (0 == errcode)
+        {
+            QJsonArray attendanceDataArray = json.value("recordresult").toArray();
+            foreach (QJsonValue jv, attendanceDataArray) {
+                qDebug() << jv.toObject().value("recordId") << jv.toObject().value("workDate");
+                qDebug() << jv.toObject().value("recordId").toInt() << jv.toObject().value("workDate").toInt() << jv.toObject().value("userId").toString()
+                         << jv.toObject().value("checkType").toString() << jv.toObject().value("timeResult").toString()
+                         << jv.toObject().value("locationResult").toString() << jv.toObject().value("baseCheckTime").toInt()
+                         << jv.toObject().value("userCheckTime").toInt();
+                if (_attendanceDataMap.contains(jv.toObject().value("userId").toString()))
+                    ;
+            }
+
+            _dateTimeFrom = _dateTimeFrom.addDays(7);
+            if (_dateTimeFrom.msecsTo(QDateTime::currentDateTime()) > 0)
+                getAttendance3();
+            else
+            {
+                _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+                _currentUserIdIndex++;
+                getAttendance3();
+            }
+
+        }
+        else
+        {
+            QString errmsg = json.value("errmsg").toString();
+            qDebug() << errmsg;
         }
         break;
     default:
@@ -84,7 +152,8 @@ void MainWindow::sTimeout()
 
     switch (_optType) {
     case OTGetAttendance:
-        getAttendance();
+//        getAttendance();
+        getDepartment();
         break;
 //    case OTProductUploadEnd:
 //        emit finished(true, tr("上传商品结束。"));
@@ -98,8 +167,8 @@ void MainWindow::getAttendance()
 {
     QString url = "https://eco.taobao.com/router/rest";
     QMap<QString, QString> paramsMap;
-    paramsMap["method"] = "dingtalk.smartwork.attends.listschedule";
-//    paramsMap["method"] = "dingtalk.smartwork.attends.getsimplegroups";
+//    paramsMap["method"] = "dingtalk.smartwork.attends.listschedule";
+    paramsMap["method"] = "dingtalk.smartwork.attends.getsimplegroups";
     paramsMap["session"] = _token;
     paramsMap["timestamp"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     paramsMap["format"] = "json";               // 接口返回结果类型:json
@@ -143,7 +212,7 @@ void MainWindow::getAttendance()
 
 void MainWindow::getAttendance2()
 {
-    QString url = "https://oapi.dingtalk.com/attendance/listRecord";
+    QString url = "https://oapi.dingtalk.com/attendance/list";
     QMap<QString, QString> paramsMap;
     paramsMap["access_token"] = _token;
 
@@ -176,6 +245,135 @@ void MainWindow::getAttendance2()
 
     QJsonDocument jsonDoc(json);
     QByteArray data = jsonDoc.toJson(QJsonDocument::Compact);
+//    QByteArray data;
+
+    _manager->post(request, data);
+}
+
+void MainWindow::getDepartment()
+{
+    QString url = "https://oapi.dingtalk.com/department/list";
+    QMap<QString, QString> paramsMap;
+    paramsMap["access_token"] = _token;
+
+    QString params;
+    QMapIterator<QString, QString> i(paramsMap);
+    while (i.hasNext())
+    {
+        i.next();
+        params.append(i.key()).append("=").append(i.value().toLatin1().toPercentEncoding()).append("&");
+    }
+    url.append("?").append(params);
+
+    QNetworkRequest request;
+    request.setUrl(QUrl(url));
+//    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+//    req.setHeader(QNetworkRequest::ContentLengthHeader, params.toLatin1().length());
+
+//    request.setUrl(QUrl("https://eco.taobao.com/router/rest" + _token));
+//    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+
+    _manager->get(request);
+}
+
+void MainWindow::getUserList()
+{
+//    foreach (QJsonValue jv, departmentArray) {
+//        qDebug() << jv.toObject().value("name").toString();
+//    }
+
+//    if (it != _departmentJsonArray.end())
+//    {
+//        qDebug() << (*it).toObject().value("name").toString();
+//        getUserList((*it).toObject().value("id").toInt());
+//    }
+//    else
+//        qDebug() << "Iterator finished.";
+
+    if (_currentIndex < _departmentJsonArray.size())
+        getUserList(_departmentJsonArray.at(_currentIndex).toObject().value("id").toInt());
+    else
+    {
+        _optType = OTGetAttendance3;
+        _currentUserIdIndex = 0;
+        _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+        getAttendance3();
+    }
+}
+
+void MainWindow::getUserList(int department_id)
+{
+    QString url = "https://oapi.dingtalk.com/user/list";
+    QMap<QString, QString> paramsMap;
+    paramsMap["access_token"] = _token;
+    paramsMap["department_id"] = QString::number(department_id);
+
+    QString params;
+    QMapIterator<QString, QString> i(paramsMap);
+    while (i.hasNext())
+    {
+        i.next();
+        params.append(i.key()).append("=").append(i.value().toLatin1().toPercentEncoding()).append("&");
+    }
+    url.append("?").append(params);
+    qDebug() << url;
+
+    QNetworkRequest request;
+    request.setUrl(QUrl(url));
+//    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+//    req.setHeader(QNetworkRequest::ContentLengthHeader, params.toLatin1().length());
+
+//    request.setUrl(QUrl("https://eco.taobao.com/router/rest" + _token));
+//    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    _manager->get(request);
+}
+
+void MainWindow::getAttendance3()
+{
+    if (_currentUserIdIndex >= _userIdList.size())
+    {
+        return;
+    }
+
+    QString url = "https://oapi.dingtalk.com/attendance/list";
+    QMap<QString, QString> paramsMap;
+    paramsMap["access_token"] = _token;
+
+    QString params;
+    QMapIterator<QString, QString> i(paramsMap);
+    while (i.hasNext())
+    {
+        i.next();
+        params.append(i.key()).append("=").append(i.value().toLatin1().toPercentEncoding()).append("&");
+    }
+    url.append("?").append(params);
+
+    QNetworkRequest request;
+    request.setUrl(QUrl(url));
+//    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+//    req.setHeader(QNetworkRequest::ContentLengthHeader, params.toLatin1().length());
+
+//    request.setUrl(QUrl("https://eco.taobao.com/router/rest" + _token));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject json;
+    json["userId"] = _userIdList.at(_currentUserIdIndex);
+
+    QDateTime dateTime = QDateTime::currentDateTime();
+//    json["workDateFrom"] = QDateTime(QDate(dateTime.date().year(), dateTime.date().month(), 1)).toString("yyyy-MM-dd hh:mm:ss");
+//    json["workDateTo"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    json["workDateFrom"] = _dateTimeFrom.toString("yyyy-MM-dd hh:mm:ss");
+    json["workDateTo"] = _dateTimeFrom.addDays(7).toString("yyyy-MM-dd hh:mm:ss");
+
+//    QJsonObject textJson;
+//    textJson["content"] = "这是一条测试消息。";
+//    json["text"] = textJson;
+
+    QJsonDocument jsonDoc(json);
+    QByteArray data = jsonDoc.toJson(QJsonDocument::Compact);
+    qDebug() << data;
 //    QByteArray data;
 
     _manager->post(request, data);
