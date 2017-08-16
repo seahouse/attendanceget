@@ -50,7 +50,7 @@ void MainWindow::sGetAttendance()
 void MainWindow::sNetworkFinished(QNetworkReply *reply)
 {
     QByteArray data = reply->readAll();
-    qDebug() << data;
+//    qDebug() << data;
 //    ui->textEdit->setText(data);
 
     QJsonObject json(QJsonDocument::fromJson(data).object());
@@ -95,10 +95,13 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
             QJsonArray userArray = json.value("userlist").toArray();
             foreach (QJsonValue jv, userArray) {
                 qDebug() << jv.toObject().value("userid").toString() << jv.toObject().value("name").toString();
-                _userIdList.append(jv.toObject().value("userid").toString());
+                if (!_userIdList.contains(jv.toObject().value("userid").toString()))
+                {
+                    _userIdList.append(jv.toObject().value("userid").toString());
 
-                _attendanceDataMap[jv.toObject().value("userid").toString()] = SUserAttendance();
-                _attendanceDataMap[jv.toObject().value("userid").toString()]._username = jv.toObject().value("name").toString();
+                    _attendanceDataMap[jv.toObject().value("userid").toString()] = SUserAttendance();
+                    _attendanceDataMap[jv.toObject().value("userid").toString()]._username = jv.toObject().value("name").toString();
+                }
             }
 
             _currentIndex++;
@@ -114,14 +117,43 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
         if (0 == errcode)
         {
             QJsonArray attendanceDataArray = json.value("recordresult").toArray();
+            QList<QDate> dList;
+            bool bOnDuty = false;
+            bool bOffDuty = false;
             foreach (QJsonValue jv, attendanceDataArray) {
-                qDebug() << jv.toObject().value("recordId") << jv.toObject().value("workDate");
-                qDebug() << jv.toObject().value("recordId").toInt() << jv.toObject().value("workDate").toInt() << jv.toObject().value("userId").toString()
+//                qDebug() << jv.toObject().value("recordId") << jv.toObject().value("workDate");
+//                qDebug() << jv.toObject().value("recordId").toDouble() << jv.toObject().value("workDate") << QString::number(jv.toObject().value("workDate").toDouble(), 'f', 0);
+//                qDebug() << QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000)  << QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000);
+//                qDebug() << QString::number(jv.toObject().value("recordId").toDouble(), 'f', 0) << QString::number(jv.toObject().value("workDate").toDouble(), 'f', 0) << jv.toObject().value("userId").toString()
+//                         << jv.toObject().value("checkType").toString() << jv.toObject().value("timeResult").toString()
+//                         << jv.toObject().value("locationResult").toString() << QString::number(jv.toObject().value("baseCheckTime").toDouble(), 'f', 0)
+//                         << QString::number(jv.toObject().value("userCheckTime").toDouble(), 'f', 0);
+                qDebug() << QString::number(jv.toObject().value("recordId").toDouble(), 'f', 0) << QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss") << jv.toObject().value("userId").toString()
                          << jv.toObject().value("checkType").toString() << jv.toObject().value("timeResult").toString()
-                         << jv.toObject().value("locationResult").toString() << jv.toObject().value("baseCheckTime").toInt()
-                         << jv.toObject().value("userCheckTime").toInt();
+                         << jv.toObject().value("locationResult").toString() << QDateTime::fromTime_t(jv.toObject().value("baseCheckTime").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss")
+                         << QDateTime::fromTime_t(jv.toObject().value("userCheckTime").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss");
                 if (_attendanceDataMap.contains(jv.toObject().value("userId").toString()))
-                    ;
+                {
+                    double recordId = jv.toObject().value("recordId").toDouble();
+                    QDateTime workDate = QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000);
+                    if (recordId > 0.0 && !dList.contains(workDate.date()))
+                    {
+                        QString checkType = jv.toObject().value("checkType").toString();
+                        if (checkType == "OnDuty")
+                            bOnDuty = true;
+                        if (checkType == "OffDuty")
+                            bOffDuty = true;
+                        if (bOnDuty && bOffDuty)
+                        {
+                            _attendanceDataMap[jv.toObject().value("userId").toString()]._onDuty = _attendanceDataMap[jv.toObject().value("userId").toString()]._onDuty + 1;
+
+                            dList.append(QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000).date());
+                            bOnDuty = false;
+                            bOffDuty = false;
+                        }
+                    }
+
+                }
             }
 
             _dateTimeFrom = _dateTimeFrom.addDays(7);
@@ -334,6 +366,11 @@ void MainWindow::getAttendance3()
 {
     if (_currentUserIdIndex >= _userIdList.size())
     {
+        QMapIterator<QString, SUserAttendance> i(_attendanceDataMap);
+        while (i.hasNext()) {
+            i.next();
+            qDebug() << i.key() << ": " << i.value()._username << i.value()._onDuty << endl;
+        }
         return;
     }
 
@@ -365,7 +402,7 @@ void MainWindow::getAttendance3()
 //    json["workDateFrom"] = QDateTime(QDate(dateTime.date().year(), dateTime.date().month(), 1)).toString("yyyy-MM-dd hh:mm:ss");
 //    json["workDateTo"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     json["workDateFrom"] = _dateTimeFrom.toString("yyyy-MM-dd hh:mm:ss");
-    json["workDateTo"] = _dateTimeFrom.addDays(7).toString("yyyy-MM-dd hh:mm:ss");
+    json["workDateTo"] = _dateTimeFrom.addDays(7).addSecs(-1).toString("yyyy-MM-dd hh:mm:ss");
 
 //    QJsonObject textJson;
 //    textJson["content"] = "这是一条测试消息。";

@@ -32,6 +32,7 @@ public:
     struct SUserAttendance
     {
         QString _username;
+        int _onDuty;                    // 上班打卡天数
     };
 
 public:
