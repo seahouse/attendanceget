@@ -26,6 +26,10 @@ public:
         OTGetAttendance,                // 获取考勤信息
         OTGetDepartment,                // 获取部门与成员信息
         OTGetAttendance3,
+        OTListschedule,                 // 考勤排班详情
+        OTListscheduling,               // 考勤排班详情
+        OTGetsimplegroups,                 // 考勤组列表详情
+        OTGetsimplegroupsing,               // 考勤组列表详情
         OTError,                        // 出错
     };
 
@@ -41,11 +45,16 @@ public:
 
 private slots:
     void sGetAttendance();
+    void sListschedule();
+    void sGetsimplegroups();
     void sNetworkFinished(QNetworkReply *reply);
     void sTimeout();
 
 private:
-    void getAttendance();
+    void getToken(OptType ot);
+
+    void listschedule();
+    void getsimplegroups();
     void getAttendance2();
 
     void getDepartment();

@@ -23,11 +23,30 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(_timer, SIGNAL(timeout()), this, SLOT(sTimeout()));
 
     connect(ui->pbnGetAttendance, SIGNAL(clicked(bool)), this, SLOT(sGetAttendance()));
+    connect(ui->pbnlistschedule, SIGNAL(clicked(bool)), this, SLOT(sListschedule()));
+    connect(ui->pbnGetsimplegroups, SIGNAL(clicked(bool)), this, SLOT(sGetsimplegroups()));
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
+}
+
+void MainWindow::getToken(OptType ot)
+{
+    _optType = ot;
+    QNetworkRequest request;
+
+    // 海亚信息技术
+//    QString corpid="ding6ed55e00b5328f39";
+//    QString corpsecret="gdQvzBl7IW5f3YUSMIkfEIsivOVn8lcXUL_i1BIJvbP4kPJh8SU8B8JuNe8U9JIo";
+
+    // 深圳市彩真包装制品有限公司
+    QString corpid="dingf6254688806d21fd35c2f4657eb6378f";
+    QString corpsecret="Ljazw5039W0XhF7b7NmRqnll5i_ZD2RHuU054x8w_XWDrO8gcH9qctRESW-LZhyL";
+
+    request.setUrl(QUrl("https://oapi.dingtalk.com/gettoken?corpid=" + corpid + "&corpsecret=" + corpsecret));
+    _manager->get(request);
 }
 
 void MainWindow::sGetAttendance()
@@ -173,6 +192,90 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
             qDebug() << errmsg;
         }
         break;
+    case OTListschedule:
+//        qDebug() << data;
+        if (0 == errcode)
+        {
+            _token = json.value("access_token").toString();
+//            qDebug() << _token;
+
+            _optType = OTListscheduling;
+            _timer->start(1000);
+        }
+        else
+        {
+            _optType = OTError;
+            QString errmsg = json.value("errmsg").toString();
+//            ui->textEdit->setText(errmsg);
+            _timer->start(1000);
+        }
+        break;
+    case OTListscheduling:
+        qDebug() << data;
+
+//        QJsonObject jo(QJsonDocument::fromJson(json.value("dingtalk_smartwork_attends_listschedle_response")).object());
+    {
+        QJsonObject jo = json.value("dingtalk_smartwork_attends_listschedule_response").toObject().value("result").toObject();
+        int ii = jo.value("ding_open_errcode").toInt();
+        QString error_msg = jo.value("error_msg").toString();
+        if (0 == ii)
+        {
+            QJsonObject joResult = jo.value("result").toObject();
+            bool has_more = joResult.value("has_more").toBool();
+            QJsonObject joSchedules = joResult.value("schedules").toObject();
+            QJsonArray jaSchedules = joSchedules.value("at_schedule_for_top_vo").toArray();
+            foreach (QJsonValue jv, jaSchedules) {
+                QJsonObject joSchedule = jv.toObject();
+                qDebug() << joSchedule.value("check_type").toString() << joSchedule.value("class_id").toDouble()
+                         << joSchedule.value("class_setting_id").toDouble() << joSchedule.value("group_id").toDouble()
+                         << joSchedule.value("plan_check_time").toString() << joSchedule.value("userid").toString();
+            }
+
+            int aa = 0;
+        }
+    }
+        break;
+    case OTGetsimplegroups:
+//        qDebug() << data;
+        if (0 == errcode)
+        {
+            _token = json.value("access_token").toString();
+//            qDebug() << _token;
+
+            _optType = OTGetsimplegroupsing;
+            _timer->start(1000);
+        }
+        else
+        {
+            _optType = OTError;
+            QString errmsg = json.value("errmsg").toString();
+//            ui->textEdit->setText(errmsg);
+            _timer->start(1000);
+        }
+        break;
+    case OTGetsimplegroupsing:
+        qDebug() << data;
+
+    {
+        QJsonObject jo = json.value("dingtalk_smartwork_attends_getsimplegroups_response").toObject().value("result").toObject();
+        int ding_open_errcode = jo.value("ding_open_errcode").toInt();
+//        QString error_msg = jo.value("error_msg").toString();
+        if (0 == ding_open_errcode)
+        {
+            QJsonObject joResult = jo.value("result").toObject();
+            bool has_more = joResult.value("has_more").toBool();
+            QJsonArray jaGroups = joResult.value("groups").toObject().value("at_group_for_top_vo").toArray();
+            foreach (QJsonValue jv, jaGroups) {
+                QJsonObject joGroup = jv.toObject();
+                qDebug() << joGroup.value("group_id").toDouble() << joGroup.value("is_default").toBool()
+                         << joGroup.value("group_name").toString() << joGroup.value("default_class_id").toDouble()
+                         << joGroup.value("member_count").toInt();
+            }
+
+            int aa = 0;
+        }
+    }
+        break;
     default:
         break;
     }
@@ -190,17 +293,28 @@ void MainWindow::sTimeout()
 //    case OTProductUploadEnd:
 //        emit finished(true, tr("上传商品结束。"));
 //        break;
+    case OTListscheduling:
+        listschedule();
+        break;
+    case OTGetsimplegroupsing:
+        getsimplegroups();
+        break;
     default:
         break;
     }
 }
 
-void MainWindow::getAttendance()
+void MainWindow::sListschedule()
+{
+    getToken(OTListschedule);
+}
+
+void MainWindow::listschedule()
 {
     QString url = "https://eco.taobao.com/router/rest";
     QMap<QString, QString> paramsMap;
-//    paramsMap["method"] = "dingtalk.smartwork.attends.listschedule";
-    paramsMap["method"] = "dingtalk.smartwork.attends.getsimplegroups";
+    paramsMap["method"] = "dingtalk.smartwork.attends.listschedule";
+//    paramsMap["method"] = "dingtalk.smartwork.attends.getsimplegroups";
     paramsMap["session"] = _token;
     paramsMap["timestamp"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     paramsMap["format"] = "json";               // 接口返回结果类型:json
@@ -237,6 +351,46 @@ void MainWindow::getAttendance()
 
 //    QJsonDocument jsonDoc(json);
 //    QByteArray data = jsonDoc.toJson(QJsonDocument::Compact);
+    QByteArray data;
+
+    _manager->post(request, data);
+}
+
+void MainWindow::sGetsimplegroups()
+{
+    getToken(OTGetsimplegroups);
+}
+
+void MainWindow::getsimplegroups()
+{
+    QString url = "https://eco.taobao.com/router/rest";
+    QMap<QString, QString> paramsMap;
+//    paramsMap["method"] = "dingtalk.smartwork.attends.listschedule";
+    paramsMap["method"] = "dingtalk.smartwork.attends.getsimplegroups";
+    paramsMap["session"] = _token;
+    paramsMap["timestamp"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    paramsMap["format"] = "json";               // 接口返回结果类型:json
+    paramsMap["v"] = "2.0";
+
+//    paramsMap["work_date"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+
+    QString params;
+    QMapIterator<QString, QString> i(paramsMap);
+    while (i.hasNext())
+    {
+        i.next();
+        params.append(i.key()).append("=").append(i.value().toLatin1().toPercentEncoding()).append("&");
+    }
+    url.append("?").append(params);
+
+    QNetworkRequest request;
+    request.setUrl(QUrl(url));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+//    req.setHeader(QNetworkRequest::ContentLengthHeader, params.toLatin1().length());
+
+//    request.setUrl(QUrl("https://eco.taobao.com/router/rest" + _token));
+//    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
     QByteArray data;
 
     _manager->post(request, data);

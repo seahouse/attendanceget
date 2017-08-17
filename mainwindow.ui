@@ -27,6 +27,32 @@
      <string>获取考勤数据</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="pbnlistschedule">
+    <property name="geometry">
+     <rect>
+      <x>120</x>
+      <y>20</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>考勤排班详情</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pbnGetsimplegroups">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>20</y>
+      <width>75</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>考勤组详情</string>
+    </property>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
