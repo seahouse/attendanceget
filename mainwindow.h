@@ -9,6 +9,7 @@
 
 class QNetworkAccessManager;
 class QNetworkReply;
+class QAxObject;
 
 namespace Ui {
 class MainWindow;
@@ -37,6 +38,8 @@ public:
     {
         QString _username;
         int _onDuty;                    // 上班打卡天数
+        int _lateMinutes;               // 迟到时长（分钟数）
+        int _onDutyFull;                // 满勤天数
     };
 
 public:
@@ -62,6 +65,11 @@ private:
     void getUserList(int department_id);
     void getAttendance3();
 
+    void handlerExcel();
+
+private slots:
+    void sOpenFile();
+
 private:
     Ui::MainWindow *ui;
 
@@ -78,6 +86,8 @@ private:
     QDateTime _dateTimeFrom;
 
     QMap<QString, SUserAttendance> _attendanceDataMap;
+
+    QAxObject *_excel;
 };
 
 #endif // MAINWINDOW_H

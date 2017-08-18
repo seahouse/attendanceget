@@ -1,12 +1,18 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 
+#include "windows.h"
+
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QTimer>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QAxObject>
+#include <QFile>
+#include <QThread>
+#include <QFileDialog>
 
 #include <QDebug>
 
@@ -22,9 +28,14 @@ MainWindow::MainWindow(QWidget *parent) :
     _timer = new QTimer;
     connect(_timer, SIGNAL(timeout()), this, SLOT(sTimeout()));
 
+//    ::CoInitialize(NULL);
+    _excel = new QAxObject("Excel.Application");
+
     connect(ui->pbnGetAttendance, SIGNAL(clicked(bool)), this, SLOT(sGetAttendance()));
     connect(ui->pbnlistschedule, SIGNAL(clicked(bool)), this, SLOT(sListschedule()));
     connect(ui->pbnGetsimplegroups, SIGNAL(clicked(bool)), this, SLOT(sGetsimplegroups()));
+
+    connect(ui->pbnOpenExcel, SIGNAL(clicked(bool)), this, SLOT(sOpenFile()));
 }
 
 MainWindow::~MainWindow()
@@ -51,6 +62,7 @@ void MainWindow::getToken(OptType ot)
 
 void MainWindow::sGetAttendance()
 {
+    ui->teOutput->append("开始统计....\n");
     _optType = OTGetAccessToken;
     QNetworkRequest request;
 
@@ -139,6 +151,13 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
             QList<QDate> dList;
             bool bOnDuty = false;
             bool bOffDuty = false;
+
+//            QList<QDate> dList2;
+//            bool bOnDuty2 = false;
+//            bool bOffDuty2 = false;
+//            bool bLate2 = false;
+//            bool bEarly2 = false;
+
             foreach (QJsonValue jv, attendanceDataArray) {
 //                qDebug() << jv.toObject().value("recordId") << jv.toObject().value("workDate");
 //                qDebug() << jv.toObject().value("recordId").toDouble() << jv.toObject().value("workDate") << QString::number(jv.toObject().value("workDate").toDouble(), 'f', 0);
@@ -155,9 +174,12 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 {
                     double recordId = jv.toObject().value("recordId").toDouble();
                     QDateTime workDate = QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000);
+                    QString checkType = jv.toObject().value("checkType").toString();
+                    QString timeResult = jv.toObject().value("timeResult").toString();
+                    QDateTime baseCheckTime = QDateTime::fromTime_t(jv.toObject().value("baseCheckTime").toDouble() / 1000);
+                    QDateTime userCheckTime = QDateTime::fromTime_t(jv.toObject().value("userCheckTime").toDouble() / 1000);
                     if (recordId > 0.0 && !dList.contains(workDate.date()))
                     {
-                        QString checkType = jv.toObject().value("checkType").toString();
                         if (checkType == "OnDuty")
                             bOnDuty = true;
                         if (checkType == "OffDuty")
@@ -171,6 +193,22 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                             bOffDuty = false;
                         }
                     }
+
+                    // 统计迟到时长
+                    if (recordId > 0.0 && checkType == "OnDuty" && timeResult == "Late")
+                    {
+                        int lateMinutes = baseCheckTime.secsTo(userCheckTime) / 60;
+                        _attendanceDataMap[jv.toObject().value("userId").toString()]._lateMinutes = _attendanceDataMap[jv.toObject().value("userId").toString()]._lateMinutes + lateMinutes;
+                    }
+
+                    // 统计满勤天数
+//                    if (recordId > 0.0 && !dList2.contains(workDate.date()))
+//                    {
+//                        if (checkType == "OnDuty")
+//                            bOnDuty2 = true;
+//                        if (checkType == "OffDuty")
+//                            bOffDuty2 = true;
+//                    }
 
                 }
             }
@@ -438,6 +476,7 @@ void MainWindow::getAttendance2()
 
 void MainWindow::getDepartment()
 {
+    ui->teOutput->append("开始获取员工信息....\n");
     QString url = "https://oapi.dingtalk.com/department/list";
     QMap<QString, QString> paramsMap;
     paramsMap["access_token"] = _token;
@@ -519,12 +558,14 @@ void MainWindow::getUserList(int department_id)
 void MainWindow::getAttendance3()
 {
     if (_currentUserIdIndex >= _userIdList.size())
+//    if (_currentUserIdIndex >= 5)
     {
         QMapIterator<QString, SUserAttendance> i(_attendanceDataMap);
         while (i.hasNext()) {
             i.next();
-            qDebug() << i.key() << ": " << i.value()._username << i.value()._onDuty << endl;
+            qDebug() << i.key() << ": " << i.value()._username << i.value()._onDuty << i.value()._lateMinutes;
         }
+        handlerExcel();
         return;
     }
 
@@ -568,4 +609,130 @@ void MainWindow::getAttendance3()
 //    QByteArray data;
 
     _manager->post(request, data);
+}
+
+void MainWindow::handlerExcel()
+{
+    ui->teOutput->append("开始处理Excel....");
+    QString fileName = ui->lineEdit->text().trimmed();
+    if (fileName.isEmpty()) return;
+
+    // 将数据转换为按照姓名为关键字
+    QMap<QString, SUserAttendance> attendanceDataMapUsername;
+    QMapIterator<QString, SUserAttendance> i(_attendanceDataMap);
+    while (i.hasNext()) {
+        i.next();
+        attendanceDataMapUsername[i.value()._username] = i.value();
+//        qDebug() << i.key() << ": " << i.value()._username << i.value()._onDuty << i.value()._lateMinutes;
+    }
+
+    if (_excel->isNull()) return;
+    _excel->dynamicCall("SetVisible", true);
+    QAxObject *workbooks = _excel->querySubObject("WorkBooks");
+//    connect(workbooks, SIGNAL(exception(int,QString, QString, QString)), this, SLOT(sException(int, QString, QString, QString)));
+//    qDebug() << filename;
+    QAxObject *workbook = workbooks->querySubObject("Open(QString,QVariant,QVariant)", fileName, 3);
+    if (!workbook)
+    {
+        qDebug() << "Excel file not exists.";
+        return;
+    }
+
+    QAxObject *ws = workbook->querySubObject("WorkSheets(int)", 1);
+    if (!ws)
+        qDebug() << "Get worksheet one failed.";
+    ws->querySubObject("select");
+
+    QAxObject *usedRange = ws->querySubObject("UsedRange");
+    QAxObject *rows = usedRange->querySubObject("Rows");
+    QAxObject *columns = usedRange->querySubObject("Columns");
+
+    int iRowStart = usedRange->property("Row").toInt();
+    int iColStart = usedRange->property("Column").toInt();
+    int iCols = columns->property("Count").toInt();
+    int iRows = rows->property("Count").toInt();
+
+    for (int i = iRowStart + 1; i < iRowStart + iRows; i++)
+    {
+        QAxObject *range = ws->querySubObject("Cells(int, int)", i, iColStart);
+        range->querySubObject("select");
+        QThread::msleep(500);
+        QString username = range->property("Value").toString().trimmed();
+        range = ws->querySubObject("Cells(int, int)", i, iColStart + 4);
+        QString checksum = range->property("Value").toString();
+        range = ws->querySubObject("Cells(int, int)", i, iColStart + 5);
+        QString filesize = range->property("Value").toString();
+
+        if (!username.isEmpty())
+        {
+            qDebug() << username << checksum << filesize;
+            if (attendanceDataMapUsername.contains(username))
+            {
+                QAxObject *cell = ws->querySubObject("Cells(int, int)", i, iColStart + 5);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._onDuty);
+
+                cell = ws->querySubObject("Cells(int, int)", i, iColStart + 7);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._lateMinutes);
+            }
+
+//            filenamesInExcel.append(filename);
+
+
+//            if (!mapCksum1.contains(filename))
+//                error = "There is no " + filename + " in file cksum\n";
+//            else
+//            {
+//                if (mapCksum1.value(filename)._cksum != checksum)
+//                    error.append("file " + file.fileName() + ": Cksum check error\n");
+//                if (mapCksum1.value(filename)._filesize != filesize)
+//                    error.append("file " + file.fileName() + ": filesize check error\n");
+//            }
+//            if (!error.isEmpty())
+//            {
+//                qDebug() << error;
+//                qWarning() << error;
+//                bRtn = false;
+//            }
+        }
+    }
+//    workbook->querySubObject("Save()");
+    workbook->dynamicCall("Save()");
+//    workbook->querySubObject("SaveAs(QVariant)");
+
+
+//    _excel->setProperty("Visible", true);
+
+//    QAxObject *workbooks = _excel->querySubObject("WorkBooks");
+//    QFile file("workbooksDoc.html");
+//    if (file.open(QIODevice::WriteOnly | QIODevice::Text))
+//    {
+//        QTextStream out(&file);
+//        out << workbooks->generateDocumentation();
+//        file.close();
+//    }
+//    QVariantList params;
+//    QAxObject *workbook = workbooks->querySubObject("Open(QString)", "4345.xlsx");
+//    if (!workbook) return;
+//    QFile fileWorkbook("workbookDoc.html");
+//    if (fileWorkbook.open(QIODevice::WriteOnly | QIODevice::Text))
+//    {
+//        QTextStream out(&fileWorkbook);
+//        out << workbook->generateDocumentation();
+//        fileWorkbook.close();
+//    }
+
+
+
+    workbook->dynamicCall("Close(QVariant)", false);
+    workbooks->dynamicCall("Close()");
+    _excel->dynamicCall("Quit()");
+
+}
+
+void MainWindow::sOpenFile()
+{
+    QString fileName = QFileDialog::getOpenFileName(this, tr("Tooling文件"), ".",
+                                                    tr("Excel文件(*.xls *.xlsx)"));
+
+    ui->lineEdit->setText(fileName);
 }
