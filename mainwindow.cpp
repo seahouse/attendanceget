@@ -32,10 +32,17 @@ MainWindow::MainWindow(QWidget *parent) :
     _excel = new QAxObject("Excel.Application");
 
     connect(ui->pbnGetAttendance, SIGNAL(clicked(bool)), this, SLOT(sGetAttendance()));
+
+
     connect(ui->pbnlistschedule, SIGNAL(clicked(bool)), this, SLOT(sListschedule()));
     connect(ui->pbnGetsimplegroups, SIGNAL(clicked(bool)), this, SLOT(sGetsimplegroups()));
 
     connect(ui->pbnOpenExcel, SIGNAL(clicked(bool)), this, SLOT(sOpenFile()));
+
+#ifdef QT_NO_DEBUG
+    ui->pbnlistschedule->hide();
+    ui->pbnGetsimplegroups->hide();
+#endif
 }
 
 MainWindow::~MainWindow()
@@ -523,6 +530,8 @@ void MainWindow::getUserList()
         _optType = OTGetAttendance3;
         _currentUserIdIndex = 0;
         _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+
+        ui->teOutput->append("开始获取考勤信息....\n");
         getAttendance3();
     }
 }
@@ -727,6 +736,7 @@ void MainWindow::handlerExcel()
     workbooks->dynamicCall("Close()");
     _excel->dynamicCall("Quit()");
 
+    ui->teOutput->append("处理结束.");
 }
 
 void MainWindow::sOpenFile()
