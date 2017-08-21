@@ -1,9 +1,13 @@
 #include "mainwindow.h"
 #include <QApplication>
 
+#include "common.h"
+
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    qInstallMessageHandler(myMessageOutput);
+
     MainWindow w;
     w.show();
 
