@@ -39,6 +39,8 @@ public:
         QString _username;
         int _onDuty;                    // 上班打卡天数
         int _lateMinutes;               // 迟到时长（分钟数）
+        int _earlyMinutes;              // 早退时长（分钟数）
+        int _normalMinutes;             // 工作时长（分钟数）
         int _onDutyFull;                // 满勤天数
     };
 
@@ -84,6 +86,7 @@ private:
     QStringList _userIdList;
     int _currentUserIdIndex;
     QDateTime _dateTimeFrom;
+    QDateTime _dateTimeTo;
 
     QMap<QString, SUserAttendance> _attendanceDataMap;
 

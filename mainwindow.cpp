@@ -39,6 +39,8 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->pbnOpenExcel, SIGNAL(clicked(bool)), this, SLOT(sOpenFile()));
 
+    ui->dateEdit->setDate(QDate::currentDate());
+
 #ifdef QT_NO_DEBUG
     ui->pbnlistschedule->hide();
     ui->pbnGetsimplegroups->hide();
@@ -176,7 +178,8 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 qDebug() << QString::number(jv.toObject().value("recordId").toDouble(), 'f', 0) << QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss") << jv.toObject().value("userId").toString()
                          << jv.toObject().value("checkType").toString() << jv.toObject().value("timeResult").toString()
                          << jv.toObject().value("locationResult").toString() << QDateTime::fromTime_t(jv.toObject().value("baseCheckTime").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss")
-                         << QDateTime::fromTime_t(jv.toObject().value("userCheckTime").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss");
+                         << QDateTime::fromTime_t(jv.toObject().value("userCheckTime").toDouble() / 1000).toString("yyyy-MM-dd hh:mm:ss")
+                         << QString::number(jv.toObject().value("groupId").toDouble(), 'f', 0) << QString::number(jv.toObject().value("planId").toDouble(), 'f', 0);
                 if (_attendanceDataMap.contains(jv.toObject().value("userId").toString()))
                 {
                     double recordId = jv.toObject().value("recordId").toDouble();
@@ -208,6 +211,24 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                         _attendanceDataMap[jv.toObject().value("userId").toString()]._lateMinutes = _attendanceDataMap[jv.toObject().value("userId").toString()]._lateMinutes + lateMinutes;
                     }
 
+                    // 统计早退时长
+                    if (recordId > 0.0 && checkType == "OffDuty" && timeResult == "Early")
+                    {
+                        int earlyMinutes = userCheckTime.secsTo(baseCheckTime) / 60;
+                        if (userCheckTime.secsTo(baseCheckTime) % 60 > 0)
+                            earlyMinutes++;
+                        _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes = _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes + earlyMinutes;
+                    }
+
+                    // 统计工作时长
+                    if (recordId > 0.0 && checkType == "OffDuty" && timeResult == "Early")
+                    {
+                        int earlyMinutes = userCheckTime.secsTo(baseCheckTime) / 60;
+                        if (userCheckTime.secsTo(baseCheckTime) % 60 > 0)
+                            earlyMinutes++;
+                        _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes = _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes + earlyMinutes;
+                    }
+
                     // 统计满勤天数
 //                    if (recordId > 0.0 && !dList2.contains(workDate.date()))
 //                    {
@@ -220,15 +241,34 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 }
             }
 
-            _dateTimeFrom = _dateTimeFrom.addDays(7);
-            if (_dateTimeFrom.msecsTo(QDateTime::currentDateTime()) > 0)
+            int days = _dateTimeTo.daysTo(QDateTime(ui->dateEdit->date()));
+            if (days > 0)
+            {
+                _dateTimeFrom = _dateTimeFrom.addDays(7);
+                if (days >= 7)
+                    _dateTimeTo = _dateTimeTo.addDays(7);
+                else
+                    _dateTimeTo = _dateTimeTo.addDays(days);
                 getAttendance3();
+            }
             else
             {
-                _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+                _dateTimeFrom = QDateTime(QDate(ui->dateEdit->date().year(), ui->dateEdit->date().month(), 1));
+                // 因为从月初开始计算，不会涉及到加7天后会跨月的情况，所以可以直接加7天
+                _dateTimeTo = _dateTimeFrom.addDays(7).addSecs(-1);
                 _currentUserIdIndex++;
                 getAttendance3();
             }
+
+//            _dateTimeFrom = _dateTimeFrom.addDays(7);
+//            if (_dateTimeFrom.msecsTo(QDateTime::currentDateTime()) > 0)
+//                getAttendance3();
+//            else
+//            {
+//                _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+//                _currentUserIdIndex++;
+//                getAttendance3();
+//            }
 
         }
         else
@@ -529,7 +569,10 @@ void MainWindow::getUserList()
     {
         _optType = OTGetAttendance3;
         _currentUserIdIndex = 0;
-        _dateTimeFrom = QDateTime(QDate(QDate::currentDate().year(), QDate::currentDate().month(), 1));
+        _dateTimeFrom = QDateTime(QDate(ui->dateEdit->date().year(), ui->dateEdit->date().month(), 1));
+        // 因为从月初开始计算，不会涉及到加7天后会跨月的情况，所以可以直接加7天
+        _dateTimeTo = _dateTimeFrom.addDays(7).addSecs(-1);
+//        _dateTimeTo = QDateTime(QDate(ui->dateEdit->date().year(), ui->dateEdit->date().month(), ui->dateEdit->date().day()), QTime(23, 59, 59));
 
         ui->teOutput->append("开始获取考勤信息....\n");
         getAttendance3();
@@ -602,11 +645,12 @@ void MainWindow::getAttendance3()
     QJsonObject json;
     json["userId"] = _userIdList.at(_currentUserIdIndex);
 
-    QDateTime dateTime = QDateTime::currentDateTime();
+//    QDateTime dateTime = QDateTime::currentDateTime();
 //    json["workDateFrom"] = QDateTime(QDate(dateTime.date().year(), dateTime.date().month(), 1)).toString("yyyy-MM-dd hh:mm:ss");
 //    json["workDateTo"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
     json["workDateFrom"] = _dateTimeFrom.toString("yyyy-MM-dd hh:mm:ss");
-    json["workDateTo"] = _dateTimeFrom.addDays(7).addSecs(-1).toString("yyyy-MM-dd hh:mm:ss");
+    json["workDateTo"] = _dateTimeTo.toString("yyyy-MM-dd hh:mm:ss");
+//    json["workDateTo"] = _dateTimeFrom.addDays(7).addSecs(-1).toString("yyyy-MM-dd hh:mm:ss");
 
 //    QJsonObject textJson;
 //    textJson["content"] = "这是一条测试消息。";
@@ -680,8 +724,11 @@ void MainWindow::handlerExcel()
                 QAxObject *cell = ws->querySubObject("Cells(int, int)", i, iColStart + 5);
                 cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._onDuty);
 
-                cell = ws->querySubObject("Cells(int, int)", i, iColStart + 7);
+                cell = ws->querySubObject("Cells(int, int)", i, iColStart + 8);
                 cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._lateMinutes);
+
+                cell = ws->querySubObject("Cells(int, int)", i, iColStart + 9);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._earlyMinutes);
             }
 
 //            filenamesInExcel.append(filename);
