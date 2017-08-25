@@ -44,6 +44,27 @@ public:
         int _onDutyFull;                // 满勤天数
     };
 
+    struct SAttendanceClass
+    {
+        SAttendanceClass() {}
+        SAttendanceClass(double classid, QString classname, int worktimeMinutes) :
+            _classid(classid), _classname(classname), _worktimeMinutes(worktimeMinutes) {}
+        double _classid;
+        QString _classname;
+        int _worktimeMinutes;
+    };
+
+    struct SAttendanceGroup
+    {
+        SAttendanceGroup() {}
+        SAttendanceGroup(double groupid, QString groupname, QStringList workdayList) :
+            _groupid(groupid), _groupname(groupname), _workdayList(workdayList) {}
+
+        double _groupid;
+        QString _groupname;
+        QStringList _workdayList;
+    };
+
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
@@ -89,6 +110,9 @@ private:
     QDateTime _dateTimeTo;
 
     QMap<QString, SUserAttendance> _attendanceDataMap;
+
+    QMap<QString, SAttendanceGroup> _attendanceGroupMap;
+    QMap<QString, SAttendanceClass> _attendanceClassMap;
 
     QAxObject *_excel;
 };

@@ -158,6 +158,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
         {
             QJsonArray attendanceDataArray = json.value("recordresult").toArray();
             QList<QDate> dList;
+            QList<QDate> dList2;        // 用于统计工作时长
             bool bOnDuty = false;
             bool bOffDuty = false;
 
@@ -221,12 +222,38 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                     }
 
                     // 统计工作时长
-                    if (recordId > 0.0 && checkType == "OffDuty" && timeResult == "Early")
+                    if (recordId > 0.0)
                     {
-                        int earlyMinutes = userCheckTime.secsTo(baseCheckTime) / 60;
-                        if (userCheckTime.secsTo(baseCheckTime) % 60 > 0)
-                            earlyMinutes++;
-                        _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes = _attendanceDataMap[jv.toObject().value("userId").toString()]._earlyMinutes + earlyMinutes;
+                        if (!dList2.contains(workDate.date()))
+                        {
+                            int weekday = workDate.date().addDays(1).dayOfWeek() - 1;
+                            QString groupId = QString::number(jv.toObject().value("groupId").toDouble(), 'f', 0);
+                            if (_attendanceGroupMap.contains(groupId))
+                            {
+                                QString classId = _attendanceGroupMap[groupId]._workdayList.at(weekday);
+                                if (!classId.isEmpty() && _attendanceClassMap.contains(classId))
+                                {
+                                    int worktimeMinutes = _attendanceClassMap[classId]._worktimeMinutes;
+                                    _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes += worktimeMinutes;
+                                }
+                            }
+                            dList2.append(workDate.date());
+                        }
+
+                        if (checkType == "OnDuty")
+                        {
+                            int onworkMinutes = userCheckTime.secsTo(baseCheckTime) / 60;
+//                            if (userCheckTime.secsTo(baseCheckTime) % 60 > 0)
+//                                onworkMinutes++;
+                            _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes += onworkMinutes;
+                        }
+                        if (checkType == "OffDuty")
+                        {
+                            int onworkMinutes = baseCheckTime.secsTo(userCheckTime) / 60;
+                            _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes += onworkMinutes;
+                        }
+
+                        qDebug() << _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes;
                     }
 
                     // 统计满勤天数
@@ -355,6 +382,24 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 qDebug() << joGroup.value("group_id").toDouble() << joGroup.value("is_default").toBool()
                          << joGroup.value("group_name").toString() << joGroup.value("default_class_id").toDouble()
                          << joGroup.value("member_count").toInt();
+                QJsonArray workdayArray = joGroup.value("work_day_list").toObject().value("string").toArray();
+                QStringList workdayList;
+                foreach (QJsonValue workdayJson, workdayArray) {
+                    workdayList.append(workdayJson.toString());
+                }
+                _attendanceGroupMap[QString::number(joGroup.value("group_id").toDouble(), 'f', 0)] = SAttendanceGroup(joGroup.value("group_id").toDouble(),
+                                                                                                                      joGroup.value("group_name").toString(),
+                                                                                                                      workdayList);
+
+                QJsonArray classArray =  joGroup.value("selected_class").toObject().value("at_class_vo").toArray();
+                foreach (QJsonValue cl, classArray) {
+                    QJsonObject clJson = cl.toObject();
+                    QString strClassid = QString::number(clJson.value("class_id").toDouble(), 'f', 0);
+                    if (!_attendanceClassMap.contains(strClassid))
+                        _attendanceClassMap[strClassid] = SAttendanceClass(clJson.value("class_id").toDouble(),
+                                                                           clJson.value("class_name").toString(),
+                                                                           clJson.value("setting").toObject().value("work_time_minutes").toInt());
+                }
             }
 
             int aa = 0;
@@ -729,6 +774,9 @@ void MainWindow::handlerExcel()
 
                 cell = ws->querySubObject("Cells(int, int)", i, iColStart + 9);
                 cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._earlyMinutes);
+
+                cell = ws->querySubObject("Cells(int, int)", i, iColStart + 6);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._normalMinutes);
             }
 
 //            filenamesInExcel.append(filename);
