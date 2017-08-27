@@ -395,10 +395,27 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 foreach (QJsonValue cl, classArray) {
                     QJsonObject clJson = cl.toObject();
                     QString strClassid = QString::number(clJson.value("class_id").toDouble(), 'f', 0);
+
+                    int minuteTotal = 0;
+                    QJsonArray sectionArray = clJson.value("sections").toObject().value("at_section_vo").toArray();
+                    foreach (QJsonValue sectionJson, sectionArray) {
+                        QJsonArray timeArray = sectionJson.toObject().value("times").toObject().value("at_time_vo").toArray();
+                        if (timeArray.size() > 1)
+                        {
+                            QDateTime dt1 = QDateTime::fromString(timeArray.at(0).toObject().value("check_time").toString(), "yyyy-MM-dd hh:mm:ss");
+                            QDateTime dt2 = QDateTime::fromString(timeArray.at(1).toObject().value("check_time").toString(), "yyyy-MM-dd hh:mm:ss");
+                            if (dt1.isValid() && dt2.isValid())
+                            {
+                                minuteTotal += qAbs(dt1.time().secsTo(dt2.time()) / 60);
+                            }
+                        }
+                    }
+
                     if (!_attendanceClassMap.contains(strClassid))
                         _attendanceClassMap[strClassid] = SAttendanceClass(clJson.value("class_id").toDouble(),
                                                                            clJson.value("class_name").toString(),
-                                                                           clJson.value("setting").toObject().value("work_time_minutes").toInt());
+//                                                                           clJson.value("setting").toObject().value("work_time_minutes").toInt(),
+                                                                           minuteTotal);
                 }
             }
 
