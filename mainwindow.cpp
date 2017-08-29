@@ -36,6 +36,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(ui->pbnlistschedule, SIGNAL(clicked(bool)), this, SLOT(sListschedule()));
     connect(ui->pbnGetsimplegroups, SIGNAL(clicked(bool)), this, SLOT(sGetsimplegroups()));
+    connect(ui->pbnGetLeaveData, SIGNAL(clicked(bool)), this, SLOT(sGetLeaveData()));
 
     connect(ui->pbnOpenExcel, SIGNAL(clicked(bool)), this, SLOT(sOpenFile()));
 
@@ -185,6 +186,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 {
                     double recordId = jv.toObject().value("recordId").toDouble();
                     QDateTime workDate = QDateTime::fromTime_t(jv.toObject().value("workDate").toDouble() / 1000);
+                    QString userId = jv.toObject().value("userId").toString();
                     QString checkType = jv.toObject().value("checkType").toString();
                     QString timeResult = jv.toObject().value("timeResult").toString();
                     QDateTime baseCheckTime = QDateTime::fromTime_t(jv.toObject().value("baseCheckTime").toDouble() / 1000);
@@ -235,6 +237,9 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                                 {
                                     int worktimeMinutes = _attendanceClassMap[classId]._worktimeMinutes;
                                     _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes += worktimeMinutes;
+
+                                    // 预期工作时长
+                                    _attendanceDataMap[userId]._expectWorkMinutes += worktimeMinutes;
                                 }
                             }
                             dList2.append(workDate.date());
@@ -255,6 +260,9 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
 
                         qDebug() << _attendanceDataMap[jv.toObject().value("userId").toString()]._normalMinutes;
                     }
+
+
+
 
                     // 统计满勤天数
 //                    if (recordId > 0.0 && !dList2.contains(workDate.date()))
@@ -423,6 +431,78 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
         }
     }
         break;
+    case OTGetLeaveData:
+        if (0 == errcode)
+        {
+            _token = json.value("access_token").toString();
+
+            _optType = OTGetLeaveDataing;
+            _timer->start(1000);
+        }
+        else
+        {
+            _optType = OTError;
+            QString errmsg = json.value("errmsg").toString();
+            ui->teOutput->append(errmsg);
+            _timer->start(1000);
+        }
+        break;
+    case OTGetLeaveDataing:
+        qDebug() << data;
+
+    {
+        QJsonObject jo = json.value("dingtalk_smartwork_bpms_processinstance_list_response").toObject().value("result").toObject();
+        int ding_open_errcode = jo.value("ding_open_errcode").toInt();
+        if (0 == ding_open_errcode)
+        {
+            QJsonObject joResult = jo.value("result").toObject();
+            // 游标。给出-1的默认值，当没有该字段时，表示没有更多的数据，用-1表示
+            int nextCursor = joResult.value("next_cursor").toInt(-1);
+            QJsonArray jaProcess = joResult.value("list").toObject().value("process_instance_top_vo").toArray();
+            foreach (QJsonValue jv, jaProcess) {
+                QJsonObject joProcess = jv.toObject();
+                qDebug() << joProcess.value("process_instance_id").toString() << joProcess.value("title").toString()
+                         << joProcess.value("create_time").toString() << joProcess.value("finish_time").toString()
+                         << joProcess.value("originator_userid").toString() << joProcess.value("originator_dept_id").toString()
+                         << joProcess.value("status").toString() << joProcess.value("process_instance_result").toString();
+//                QJsonArray workdayArray = joGroup.value("work_day_list").toObject().value("string").toArray();
+//                QStringList workdayList;
+//                foreach (QJsonValue workdayJson, workdayArray) {
+//                    workdayList.append(workdayJson.toString());
+//                }
+//                _attendanceGroupMap[QString::number(joGroup.value("group_id").toDouble(), 'f', 0)] = SAttendanceGroup(joGroup.value("group_id").toDouble(),
+//                                                                                                                      joGroup.value("group_name").toString(),
+//                                                                                                                      workdayList);
+
+//                QJsonArray classArray =  joGroup.value("selected_class").toObject().value("at_class_vo").toArray();
+//                foreach (QJsonValue cl, classArray) {
+//                    QJsonObject clJson = cl.toObject();
+//                    QString strClassid = QString::number(clJson.value("class_id").toDouble(), 'f', 0);
+
+//                    int minuteTotal = 0;
+//                    QJsonArray sectionArray = clJson.value("sections").toObject().value("at_section_vo").toArray();
+//                    foreach (QJsonValue sectionJson, sectionArray) {
+//                        QJsonArray timeArray = sectionJson.toObject().value("times").toObject().value("at_time_vo").toArray();
+//                        if (timeArray.size() > 1)
+//                        {
+//                            QDateTime dt1 = QDateTime::fromString(timeArray.at(0).toObject().value("check_time").toString(), "yyyy-MM-dd hh:mm:ss");
+//                            QDateTime dt2 = QDateTime::fromString(timeArray.at(1).toObject().value("check_time").toString(), "yyyy-MM-dd hh:mm:ss");
+//                            if (dt1.isValid() && dt2.isValid())
+//                            {
+//                                minuteTotal += qAbs(dt1.time().secsTo(dt2.time()) / 60);
+//                            }
+//                        }
+//                    }
+
+//                    if (!_attendanceClassMap.contains(strClassid))
+//                        _attendanceClassMap[strClassid] = SAttendanceClass(clJson.value("class_id").toDouble(),
+//                                                                           clJson.value("class_name").toString(),
+//                                                                           minuteTotal);
+//                }
+            }
+        }
+    }
+        break;
     default:
         break;
     }
@@ -445,6 +525,9 @@ void MainWindow::sTimeout()
         break;
     case OTGetsimplegroupsing:
         getsimplegroups();
+        break;
+    case OTGetLeaveDataing:
+        getLeaveData();
         break;
     default:
         break;
@@ -793,7 +876,8 @@ void MainWindow::handlerExcel()
                 cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._earlyMinutes);
 
                 cell = ws->querySubObject("Cells(int, int)", i, iColStart + 6);
-                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._normalMinutes);
+//                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._normalMinutes);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._expectWorkMinutes);
             }
 
 //            filenamesInExcel.append(filename);
@@ -857,4 +941,70 @@ void MainWindow::sOpenFile()
                                                     tr("Excel文件(*.xls *.xlsx)"));
 
     ui->lineEdit->setText(fileName);
+}
+
+void MainWindow::sGetLeaveData()
+{
+    getToken(OTGetLeaveData);
+}
+
+void MainWindow::getLeaveData()
+{
+//    if (_currentUserIdIndex >= _userIdList.size())
+//    {
+//        QMapIterator<QString, SUserAttendance> i(_attendanceDataMap);
+//        while (i.hasNext()) {
+//            i.next();
+//            qDebug() << i.key() << ": " << i.value()._username << i.value()._onDuty << i.value()._lateMinutes;
+//        }
+//        handlerExcel();
+//        return;
+//    }
+
+    QString url = "https://eco.taobao.com/router/rest";
+    QMap<QString, QString> paramsMap;
+    paramsMap["method"] = "dingtalk.smartwork.bpms.processinstance.list";
+    paramsMap["session"] = _token;
+    paramsMap["timestamp"] = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss");
+    paramsMap["format"] = "json";
+    paramsMap["v"] = "2.0";
+
+    paramsMap["process_code"] = "PROC-EF6YJDXRN2-KYCJHJ3OM3FW9SVFG93W1-YWTM0L0J-05";
+//    uint timeT = QDateTime::currentDateTime().toTime_t();
+    uint timeT = QDateTime(QDate(2017, 8, 6)).toTime_t();
+    paramsMap["start_time"] = QString::number(timeT).append("000");
+//    paramsMap["start_time"] = "1502323200000";
+    uint timeTEnd = QDateTime(QDate(2017, 8, 8)).toTime_t();
+    paramsMap["end_time"] = QString::number(timeTEnd).append("000");
+
+
+    QString params;
+    QMapIterator<QString, QString> i(paramsMap);
+    while (i.hasNext())
+    {
+        i.next();
+        params.append(i.key()).append("=").append(i.value().toLatin1().toPercentEncoding()).append("&");
+    }
+    url.append("?").append(params);
+
+    QNetworkRequest request;
+    request.setUrl(QUrl(url));
+//    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-www-form-urlencoded");
+//    req.setHeader(QNetworkRequest::ContentLengthHeader, params.toLatin1().length());
+
+//    request.setUrl(QUrl("https://eco.taobao.com/router/rest" + _token));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+//    QJsonObject json;
+//    json["userId"] = _userIdList.at(_currentUserIdIndex);
+
+//    json["workDateFrom"] = _dateTimeFrom.toString("yyyy-MM-dd hh:mm:ss");
+//    json["workDateTo"] = _dateTimeTo.toString("yyyy-MM-dd hh:mm:ss");
+
+//    QJsonDocument jsonDoc(json);
+//    QByteArray data = jsonDoc.toJson(QJsonDocument::Compact);
+//    qDebug() << data;
+    QByteArray data;
+
+    _manager->post(request, data);
 }

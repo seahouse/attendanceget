@@ -31,6 +31,8 @@ public:
         OTListscheduling,               // 考勤排班详情
         OTGetsimplegroups,                 // 考勤组列表详情
         OTGetsimplegroupsing,               // 考勤组列表详情
+        OTGetLeaveData,                 // 获取请假数据_token
+        OTGetLeaveDataing,              // 获取请假数据
         OTError,                        // 出错
     };
 
@@ -41,6 +43,7 @@ public:
         int _lateMinutes;               // 迟到时长（分钟数）
         int _earlyMinutes;              // 早退时长（分钟数）
         int _normalMinutes;             // 工作时长（分钟数）
+        int _expectWorkMinutes;         // 预期工作时长（分钟数）
         int _onDutyFull;                // 满勤天数
     };
 
@@ -76,6 +79,7 @@ private slots:
     void sNetworkFinished(QNetworkReply *reply);
     void sTimeout();
 
+
 private:
     void getToken(OptType ot);
 
@@ -92,6 +96,12 @@ private:
 
 private slots:
     void sOpenFile();
+
+private slots:
+    void sGetLeaveData();       // 获取请假数据
+
+private:
+    void getLeaveData();
 
 private:
     Ui::MainWindow *ui;
