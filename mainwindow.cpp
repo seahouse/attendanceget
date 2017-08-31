@@ -461,10 +461,41 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
             QJsonArray jaProcess = joResult.value("list").toObject().value("process_instance_top_vo").toArray();
             foreach (QJsonValue jv, jaProcess) {
                 QJsonObject joProcess = jv.toObject();
+
+                QString userid = joProcess.value("originator_userid").toString();
                 qDebug() << joProcess.value("process_instance_id").toString() << joProcess.value("title").toString()
                          << joProcess.value("create_time").toString() << joProcess.value("finish_time").toString()
                          << joProcess.value("originator_userid").toString() << joProcess.value("originator_dept_id").toString()
                          << joProcess.value("status").toString() << joProcess.value("process_instance_result").toString();
+                QJsonArray formValueArray = joProcess.value("form_component_values").toObject().value("form_component_value_vo").toArray();
+                foreach (QJsonValue jvFormValue, formValueArray) {
+                    QJsonObject joFormValue = jvFormValue.toObject();
+                    qDebug() << joFormValue.value("name").toString() << joFormValue.value("value").toString();
+                    if (joFormValue.value("name").toString() == "[\"开始时间","结束时间\"]")
+                    {
+                        QString timeValue = joFormValue.value("value").toString();
+                        QStringList timeValueList = timeValue.mid(1, timeValue.size() - 2).split(",", QString::SkipEmptyParts);
+                        qDebug() << timeValueList;
+                        QJsonDocument jsonDocument = QJsonDocument::fromJson(timeValue.toLatin1());
+                        if (jsonDocument.isArray())
+                        {
+                            QJsonArray timeValueArray = jsonDocument.array();
+                            if (timeValueArray.size() > 5)
+                            {
+                                if (timeValueArray.at(3).toString() == "day")
+                                {
+                                    QDate d1 = QDate::fromString(timeValueArray.at(1).toString(), "yyyy-MM-dd");
+                                    QDate d2 = QDate::fromString(timeValueArray.at(1).toString(), "yyyy-MM-dd");
+                                    if (_leaveDayMap.contains(userid))
+                                        _leaveDayMap[userid] += timeValueArray.at(2).toInt();
+                                    else
+                                        _leaveDayMap[userid] = timeValueArray.at(2).toInt();
+                                }
+                            }
+                        }
+                    }
+                }
+
 //                QJsonArray workdayArray = joGroup.value("work_day_list").toObject().value("string").toArray();
 //                QStringList workdayList;
 //                foreach (QJsonValue workdayJson, workdayArray) {

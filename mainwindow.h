@@ -45,6 +45,7 @@ public:
         int _normalMinutes;             // 工作时长（分钟数）
         int _expectWorkMinutes;         // 预期工作时长（分钟数）
         int _onDutyFull;                // 满勤天数
+        double _leaveDays;              // 请假天数
     };
 
     struct SAttendanceClass
@@ -67,6 +68,8 @@ public:
         QString _groupname;
         QStringList _workdayList;
     };
+
+
 
 public:
     explicit MainWindow(QWidget *parent = 0);
@@ -123,6 +126,7 @@ private:
 
     QMap<QString, SAttendanceGroup> _attendanceGroupMap;
     QMap<QString, SAttendanceClass> _attendanceClassMap;
+    QMap<QString, double> _leaveDayMap;
 
     QAxObject *_excel;
 };
