@@ -135,6 +135,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
         {
             QJsonArray userArray = json.value("userlist").toArray();
             foreach (QJsonValue jv, userArray) {
+                QString userid = jv.toObject().value("userid").toString();
                 qDebug() << jv.toObject().value("userid").toString() << jv.toObject().value("name").toString();
                 if (!_userIdList.contains(jv.toObject().value("userid").toString()))
                 {
@@ -142,6 +143,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
 
                     _attendanceDataMap[jv.toObject().value("userid").toString()] = SUserAttendance();
                     _attendanceDataMap[jv.toObject().value("userid").toString()]._username = jv.toObject().value("name").toString();
+                    _attendanceDataMap[userid]._leaveDays = _leaveDayMap[userid];
                 }
             }
 
@@ -471,7 +473,7 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                 foreach (QJsonValue jvFormValue, formValueArray) {
                     QJsonObject joFormValue = jvFormValue.toObject();
                     qDebug() << joFormValue.value("name").toString() << joFormValue.value("value").toString();
-                    if (joFormValue.value("name").toString() == "[\"开始时间","结束时间\"]")
+                    if (joFormValue.contains("name") && joFormValue.value("name").toString() == "[\"开始时间","结束时间\"]")
                     {
                         QString timeValue = joFormValue.value("value").toString();
                         QStringList timeValueList = timeValue.mid(1, timeValue.size() - 2).split(",", QString::SkipEmptyParts);
@@ -482,14 +484,22 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
                             QJsonArray timeValueArray = jsonDocument.array();
                             if (timeValueArray.size() > 5)
                             {
-                                if (timeValueArray.at(3).toString() == "day")
+                                QString leaveType = timeValueArray.at(3).toString();
+                                // 按天请假的，不进行统计，因为在统计考勤时，已经计入
+                                if (leaveType == "day")
                                 {
-                                    QDate d1 = QDate::fromString(timeValueArray.at(1).toString(), "yyyy-MM-dd");
-                                    QDate d2 = QDate::fromString(timeValueArray.at(1).toString(), "yyyy-MM-dd");
-                                    if (_leaveDayMap.contains(userid))
-                                        _leaveDayMap[userid] += timeValueArray.at(2).toInt();
-                                    else
-                                        _leaveDayMap[userid] = timeValueArray.at(2).toInt();
+//                                    if (_leaveDayMap.contains(userid))
+//                                        _leaveDayMap[userid] += timeValueArray.at(2).toInt();
+//                                    else
+//                                        _leaveDayMap[userid] = timeValueArray.at(2).toInt();
+                                }
+                                else if (leaveType == "hour")
+                                {
+
+//                                    if (_leaveDayMap.contains(userid))
+//                                        _leaveDayMap[userid] += timeValueArray.at(2).toInt();
+//                                    else
+//                                        _leaveDayMap[userid] = timeValueArray.at(2).toInt();
                                 }
                             }
                         }
@@ -531,6 +541,9 @@ void MainWindow::sNetworkFinished(QNetworkReply *reply)
 //                                                                           minuteTotal);
 //                }
             }
+
+            if (nextCursor > 0)
+                getLeaveData(nextCursor);
         }
     }
         break;
@@ -898,7 +911,7 @@ void MainWindow::handlerExcel()
             if (attendanceDataMapUsername.contains(username))
             {
                 QAxObject *cell = ws->querySubObject("Cells(int, int)", i, iColStart + 5);
-                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._onDuty);
+                cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._onDuty - attendanceDataMapUsername[username]._leaveDays);
 
                 cell = ws->querySubObject("Cells(int, int)", i, iColStart + 8);
                 cell->querySubObject("SetValue2(QVariant)", attendanceDataMapUsername[username]._lateMinutes);
@@ -979,7 +992,7 @@ void MainWindow::sGetLeaveData()
     getToken(OTGetLeaveData);
 }
 
-void MainWindow::getLeaveData()
+void MainWindow::getLeaveData(int nextCursor)
 {
 //    if (_currentUserIdIndex >= _userIdList.size())
 //    {
@@ -1002,12 +1015,13 @@ void MainWindow::getLeaveData()
 
     paramsMap["process_code"] = "PROC-EF6YJDXRN2-KYCJHJ3OM3FW9SVFG93W1-YWTM0L0J-05";
 //    uint timeT = QDateTime::currentDateTime().toTime_t();
-    uint timeT = QDateTime(QDate(2017, 8, 6)).toTime_t();
+    uint timeT = QDateTime(QDate(QDate(ui->dateEdit->date().year(), ui->dateEdit->date().month(), 1))).toTime_t();
     paramsMap["start_time"] = QString::number(timeT).append("000");
 //    paramsMap["start_time"] = "1502323200000";
-    uint timeTEnd = QDateTime(QDate(2017, 8, 8)).toTime_t();
+    uint timeTEnd = QDateTime(ui->dateEdit->date().addDays(1)).toTime_t();
     paramsMap["end_time"] = QString::number(timeTEnd).append("000");
-
+    if (nextCursor > 0)
+        paramsMap["cursor"] = QString::number(nextCursor);
 
     QString params;
     QMapIterator<QString, QString> i(paramsMap);

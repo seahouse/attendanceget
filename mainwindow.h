@@ -39,7 +39,7 @@ public:
     struct SUserAttendance
     {
         QString _username;
-        int _onDuty;                    // 上班打卡天数
+        double _onDuty;                 // 上班打卡天数
         int _lateMinutes;               // 迟到时长（分钟数）
         int _earlyMinutes;              // 早退时长（分钟数）
         int _normalMinutes;             // 工作时长（分钟数）
@@ -68,8 +68,6 @@ public:
         QString _groupname;
         QStringList _workdayList;
     };
-
-
 
 public:
     explicit MainWindow(QWidget *parent = 0);
@@ -104,7 +102,7 @@ private slots:
     void sGetLeaveData();       // 获取请假数据
 
 private:
-    void getLeaveData();
+    void getLeaveData(int nextCursor = 0);
 
 private:
     Ui::MainWindow *ui;
