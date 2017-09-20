@@ -25,6 +25,7 @@ public:
         OTNone,
         OTGetAccessToken,               // 获取AccessToken
         OTGetAttendance,                // 获取考勤信息
+        OTGetAttendancing,              // 获取考勤信息
         OTGetDepartment,                // 获取部门与成员信息
         OTGetAttendance3,
         OTListschedule,                 // 考勤排班详情
@@ -33,6 +34,10 @@ public:
         OTGetsimplegroupsing,               // 考勤组列表详情
         OTGetLeaveData,                 // 获取请假数据_token
         OTGetLeaveDataing,              // 获取请假数据
+        OTGetAssessData,                // 获取每天考核表_token
+        OTGetAssessDataing,             // 获取每天考核表
+        OTGetLoanData,                  // 获取借款数据_token
+        OTGetLoanDataing,               // 获取借款数据
         OTError,                        // 出错
     };
 
@@ -46,6 +51,7 @@ public:
         int _expectWorkMinutes;         // 预期工作时长（分钟数）
         int _onDutyFull;                // 满勤天数
         double _leaveDays;              // 请假天数
+        double _loanAmount;             // 借款金额
     };
 
     struct SAttendanceClass
@@ -69,6 +75,35 @@ public:
         QStringList _workdayList;
     };
 
+    // 当天排班信息上下班信息
+    struct SListschedule
+    {
+        SListschedule() {}
+        SListschedule(QString userid, QString groupid, QString classid, QString classsettingid, QString checktype,
+                      QDateTime planchecktime, int approveid) :
+            _userid(userid), _groupid(groupid), _classid(classid), _classsettingid(classsettingid), _checktype(checktype),
+            _planchecktime(planchecktime), _approveid(approveid)
+        {}
+        QString _userid;
+        QString _groupid;
+        QString _classid;
+        QString _classsettingid;
+        QString _checktype;
+        QDateTime _planchecktime;
+        int _approveid;
+
+        // 实际打卡情况
+        mutable QString _timeResult;
+        mutable QDateTime _userCheckTime;
+        mutable int _approveIdAct;
+    };
+
+    // 用户当天排班信息
+    struct SUserListschedule
+    {
+        QList<SListschedule> _listscheduleList;
+    };
+
 public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
@@ -84,7 +119,7 @@ private slots:
 private:
     void getToken(OptType ot);
 
-    void listschedule();
+    void listschedule(int offset = 0);
     void getsimplegroups();
     void getAttendance2();
 
@@ -103,6 +138,17 @@ private slots:
 
 private:
     void getLeaveData(int nextCursor = 0);
+
+private slots:
+    void sGetAssessData();
+private:
+    void getAssessData(int nextCursor = 0);
+
+private slots:
+    void sGetLoanData();
+private:
+    void getLoanData(int nextCursor = 0);
+
 
 private:
     Ui::MainWindow *ui;
@@ -125,6 +171,13 @@ private:
     QMap<QString, SAttendanceGroup> _attendanceGroupMap;
     QMap<QString, SAttendanceClass> _attendanceClassMap;
     QMap<QString, double> _leaveDayMap;
+    QMap<QPair<QString, QDate>, double> _leaveDayMap2;      // 请假小时数
+
+    QMap<QString, SUserListschedule> _userListscheduleMap;  // 用户当天的考勤排班数据
+    int _listscheduleSize;
+    QDateTime _listscheduleDatetime;
+    QMap<QString, double> _assessRewardMap;     // 奖励金额，key为用户名
+    QMap<QString, double> _assessPunishMap;     // 处罚金额，key为用户名
 
     QAxObject *_excel;
 };
